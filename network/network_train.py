@@ -40,11 +40,7 @@ def create_model(filters, gru_units, dense_neurons, dropout):
     c_3 = Conv2D(filters, (3,3), padding='same', activation='relu')(mp_2)
     mp_3 = MaxPooling2D(pool_size=(1,2))(c_3)
 
-    # import pdb; pdb.set_trace()
     reshape_1 = Reshape((x_train.shape[-3], -1))(mp_3)
-    #reshape_1 = Reshape((259, -1))(mp_3) # imagine it is refering to the last dimension of the spectrograms
-
-
     rnn_1 = Bidirectional(GRU(units=gru_units, activation='tanh', dropout=dropout, 
                               recurrent_dropout=dropout, return_sequences=True), merge_mode='mul')(reshape_1)
     rnn_2 = Bidirectional(GRU(units=gru_units, activation='tanh', dropout=dropout, 
@@ -229,26 +225,51 @@ os.environ["CUDA_VISIBLE_DEVICES"]="1"  # select GPU
 # IN tf.Session(config=config)
 
 # load train and validation datasets
-x_train = np.load('../datasets/x_train.npy', allow_pickle=True)
 
-x_val = np.stack(np.load('../datasets/x_val.npy', allow_pickle=True), axis=0)
-x_test = np.stack(np.load('../datasets/x_test.npy', allow_pickle=True), axis=0)
+# x_train = np.load('../datasets/x_train.npy', allow_pickle=True)
+# x_val = np.load('../datasets/x_val.npy', allow_pickle=True)
+# x_test = np.load('../datasets/x_test.npy', allow_pickle=True)
+# y_train = np.load('../datasets/y_train.npy', allow_pickle=True)
+# y_val = np.load('../datasets/y_val.npy', allow_pickle=True)
+# y_test = np.load('../datasets/y_test.npy', allow_pickle=True)
+
+x_train = np.expand_dims(np.stack(np.load('../datasets/x_train.npy', allow_pickle=True), axis=0), axis=-1)
+x_val = np.expand_dims(np.stack(np.load('../datasets/x_val.npy', allow_pickle=True), axis=0), axis=-1)
+x_test = np.expand_dims(np.stack(np.load('../datasets/x_test.npy', allow_pickle=True), axis=0), axis=-1)
+
 y_train = np.stack(np.load('../datasets/y_train.npy', allow_pickle=True), axis=0)
 y_val = np.stack(np.load('../datasets/y_val.npy', allow_pickle=True), axis=0)
 y_test = np.stack(np.load('../datasets/y_test.npy', allow_pickle=True), axis=0)
-import pdb; pdb.set_trace()
+# y_train = np.expand_dims(np.stack(np.load('../datasets/y_train.npy', allow_pickle=True), axis=0), axis=-1)
+# y_val = np.expand_dims(np.stack(np.load('../datasets/y_val.npy', allow_pickle=True), axis=0), axis=-1)
+# y_test = np.expand_dims(np.stack(np.load('../datasets/y_test.npy', allow_pickle=True), axis=0), axis=-1)
 
+
+x_train = x_train.reshape(x_train.shape[0], x_train.shape[2], x_train.shape[1], 1)
+x_val = x_val.reshape(x_val.shape[0], x_val.shape[2], x_val.shape[1], 1)
+x_test = x_test.reshape(x_test.shape[0], x_test.shape[2], x_test.shape[1], 1)
+#  x shapes: (Bs, time_steps, mel_bands, 1)
+y_train = y_train.reshape(y_train.shape[0], y_train.shape[2], y_train.shape[1])
+y_val = y_val.reshape(y_val.shape[0], y_val.shape[2], y_val.shape[1])
+y_test = y_test.reshape(y_test.shape[0], y_test.shape[2], y_test.shape[1])
+#   y shapes: (BS, time_steps, classes(8))
+# import pdb; pdb.set_trace()
 
 model = create_model(filters=128, gru_units=128, dense_neurons=1024, dropout=0.5)
 print(model.summary())
-adam = optimizers.Adam(lr=0.0001, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
+# print(model)
+# import pdb; pdb.set_trace()
+#adam = optimizers.Adam(lr=0.0001, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
+adam = optimizers.Adam(lr=0.0001, beta_1=0.9, epsilon=0.1, decay=0.0, amsgrad=False, beta_2=0.999) # IN removing epsilon = None made it work the Valeu error regarding None )
+
 model.compile(optimizer=adam, loss='binary_crossentropy', metrics=['binary_accuracy'])
+
 epochs = 2500
-batch_size = 256
+batch_size = 128
 early_stopping = EarlyStopping(monitor='val_loss', patience=100, restore_best_weights=True, verbose=1)
 reduce_lr_plat = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=25, verbose=1,
                                    mode='auto', min_delta=0.0001, cooldown=0, min_lr=0.000001)
-
+# import pdb; pdb.set_trace()
 model_fit = model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size,
                       validation_data=(x_val, y_val), shuffle=True,
                       callbacks=[early_stopping, reduce_lr_plat])
